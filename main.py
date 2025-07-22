@@ -1,4 +1,5 @@
 
+
 import asyncio
 import os
 import sys
@@ -16,7 +17,8 @@ if __name__ == "__main__":
 
     # UTF-8 인코딩 설정 (Windows 콘솔 출력용)
     if sys.platform == "win32":
-        os.environ["PYTHONIOENCODING"] = "utf-8"
+        sys.stdout.reconfigure(encoding='utf-8')
 
     controller = CrawlerController(limit=POST_LIMIT, headless=HEADLESS_MODE, db_path=DB_PATH)
     asyncio.run(controller.run())
+
