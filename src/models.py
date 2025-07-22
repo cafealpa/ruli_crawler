@@ -9,3 +9,4 @@ class Post:
     url: str
     content: Optional[str] = None
     image_urls: List[str] = field(default_factory=list)
+    comments: List[str] = field(default_factory=list)

@@ -51,6 +51,9 @@ class RuliwebScraper:
         title = await page.locator(".subject_inner_text").inner_text()
         content = await page.locator(".view_content").inner_text()
         
+        comments_elements = await page.query_selector_all(".comment_view .text_content")
+        comments = [await comment.inner_text() for comment in comments_elements]
+
         images = await page.query_selector_all(".view_content img")
         image_urls = []
         if images:
@@ -61,4 +64,4 @@ class RuliwebScraper:
                 image_urls.append(img_url)
 
         await page.close()
-        return Post(title=title.strip(), url=url, content=content.strip(), image_urls=image_urls)
+        return Post(title=title.strip(), url=url, content=content.strip(), image_urls=image_urls, comments=comments)

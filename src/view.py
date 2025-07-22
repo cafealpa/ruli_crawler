@@ -16,6 +16,10 @@ class ConsoleView:
             print(f"내용: {post.content}")
         if post.image_urls:
             print(f"이미지 URL: {', '.join(post.image_urls)}")
+        if post.comments:
+            print("댓글:")
+            for j, comment in enumerate(post.comments):
+                print(f"  - {j+1}. {comment.strip()}")
         print("-" * 20)
 
     def display_error(self, message: str):
