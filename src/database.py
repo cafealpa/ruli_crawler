@@ -147,6 +147,8 @@ class DatabaseManager:
             query += " AND (title LIKE ? OR content LIKE ?)"
             params.extend([f'%{keyword}%', f'%{keyword}%'])
 
+        print(query, params)
+
         self.cursor.execute(query, params)
         rows = self.cursor.fetchall()
         posts = []

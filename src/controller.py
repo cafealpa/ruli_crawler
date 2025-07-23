@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 
 from .database import DatabaseManager
 from .scraper import RuliwebScraper
@@ -7,18 +7,28 @@ from .view import ConsoleView
 
 class CrawlerController:
     """크롤러의 동작을 제어하는 클래스 (Controller 역할)"""
-    def __init__(self, limit: int, headless: bool, db_path: str):
+    from typing import Optional, Any # Any 추가
+
+from .database import DatabaseManager
+from .scraper import RuliwebScraper
+from .view import ConsoleView
+
+
+class CrawlerController:
+    """크롤러의 동작을 제어하는 클래스 (Controller 역할)"""
+    def __init__(self, limit: int, headless: bool, db_path: str, view: Any = None):
         """초기화 메서드
 
         Args:
             limit (int): 크롤링할 게시글의 최대 개수.
             headless (bool): Playwright 브라우저를 헤드리스 모드로 실행할지 여부.
             db_path (str): SQLite 데이터베이스 파일 경로.
+            view (Any): 메시지를 표시할 뷰 객체 (기본값: ConsoleView).
         """
         self.limit = limit
         self.headless = headless
         self.db_manager = DatabaseManager(db_path)
-        self.view = ConsoleView()
+        self.view = view if view else ConsoleView()
 
     async def run(self):
         """크롤링 작업을 실행하는 메인 비동기 메서드"""
@@ -51,18 +61,19 @@ class CrawlerController:
         self.db_manager.close()
         self.view.show_message("크롤링이 완료되었습니다.")
 
-    def search_and_display_posts(self, start_date: str, end_date: str, keyword: Optional[str] = None):
+    def search_posts(self, start_date: str, end_date: str, keyword: Optional[str] = None):
         """
-        지정된 기간과 키워드로 게시글을 검색하고 결과를 콘솔에 출력합니다.
+        지정된 기간과 키워드로 게시글을 검색하고 결과를 반환합니다.
 
         Args:
             start_date (str): 검색 시작 날짜 (YYYY-MM-DD 형식).
             end_date (str): 검색 종료 날짜 (YYYY-MM-DD 형식).
             keyword (Optional[str]): 제목 또는 내용에서 검색할 키워드.
+        Returns:
+            List[Post]: 검색된 게시글 리스트.
         """
-        self.view.show_message(f"게시글 검색 중: 기간 {start_date} ~ {end_date}, 키워드 '{keyword if keyword else '없음'}'")
         self.db_manager.connect()
         posts = self.db_manager.search_posts(start_date, end_date, keyword)
         self.db_manager.close()
-        self.view.display_search_results(posts, start_date, end_date, keyword)
+        return posts
 

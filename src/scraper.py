@@ -85,7 +85,8 @@ class RuliwebScraper:
             post_created_element = await page.query_selector(".regdate") # 실제 웹사이트의 선택자에 따라 변경 필요
             post_created = await post_created_element.inner_text() if post_created_element else None
             if post_created:
-                post_created = post_created.strip()
+                print(post_created.strip())
+                post_created = self.convert_date_format(post_created.strip())
 
             # 댓글을 추출합니다.
             comments = []
@@ -97,7 +98,8 @@ class RuliwebScraper:
                 for comment in comments_elements:
                     # HTML 정제: 모든 공백(탭, 줄바꿈 등)을 하나의 공백으로 변경
                     raw_html = await comment.inner_html()
-                    comment_html = re.sub(r'\s+', ' ', raw_html).strip()
+                    # comment_html = re.sub(r'\s+', ' ', raw_html).strip()
+                    comment_html = raw_html.replace('\n').replace('\t').strip()
 
                     comment_p_text = await comment.query_selector("p.text")
                     comment_text = await comment_p_text.inner_text()
@@ -131,6 +133,28 @@ class RuliwebScraper:
             await page.close()
 
         return post, comments
+
+    # 25.07.23 (14:30:21) 문자열을 2025-07-23 (14:30:21) 으로 변경해주는 함수
+    @staticmethod
+    def convert_date_format(date_string: str) -> str:
+        """날짜 문자열의 형식을 변환합니다.
+    
+        Args:
+            date_string (str): "DD.MM.YY (HH:MM:SS)" 형식의 날짜 문자열
+    
+        Returns:
+            str: "YYYY-MM-DD (HH:MM:SS)" 형식으로 변환된 날짜 문자열
+        """
+        if not date_string:
+            return None
+
+        date_part, time_part = date_string.split(' ', 1)
+        year, month, day = date_part.split('.')
+
+        # 2자리 연도를 4자리로 변환 (20xx 년대로 가정)
+        full_year = '20' + year
+
+        return f"{full_year}-{month}-{day} {time_part}"
 
 
 async def main():
