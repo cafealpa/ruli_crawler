@@ -18,3 +18,4 @@ class Post:
     content: Optional[str] = None  # 게시글 내용 (HTML 포함)
     image_urls: List[str] = field(default_factory=list)  # 게시글 내 이미지 URL 리스트
     post_created: Optional[str] = None  # 게시글 생성일
+    comments: List['Comment'] = field(default_factory=list) # 해당 게시글의 댓글 리스트

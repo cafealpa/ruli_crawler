@@ -68,4 +68,5 @@ class ConsoleView:
             print(f"URL: {post.url}")
             print(f"생성일: {post.post_created}")
             print(f"내용: {post.content[:150]}...") # 내용이 길 경우 일부만 표시
+            self.display_comments(post.comments)
 

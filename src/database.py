@@ -94,39 +94,39 @@ class DatabaseManager:
         Returns:
             List[Post]: 조회된 Post 객체 리스트.
         """
-        self.cursor.execute("SELECT title, url, content, image_urls, post_created FROM posts")
+        self.cursor.execute("SELECT id, title, url, content, image_urls, post_created FROM posts")
         rows = self.cursor.fetchall()
         posts = []
         for row in rows:
-            title, url, content, image_urls_json, post_created = row
+            post_id, title, url, content, image_urls_json, post_created = row
             image_urls = json.loads(image_urls_json) if image_urls_json else []
-            posts.append(Post(title=title, url=url, content=content, image_urls=image_urls, post_created=post_created))
+            comments = self.get_comments_for_post(post_id)
+            posts.append(Post(title=title, url=url, content=content, image_urls=image_urls, post_created=post_created, comments=comments))
         return posts
 
-    def get_comments_for_post(self, post_url: str) -> List[Comment]:
+    def get_comments_for_post(self, post_id: int) -> List[Comment]:
         """특정 게시글의 댓글을 조회합니다.
 
         Args:
-            post_url (str): 댓글을 조회할 게시글의 URL.
+            post_id (int): 댓글을 조회할 게시글의 ID.
 
         Returns:
             List[Comment]: 조회된 Comment 객체 리스트.
         """
         self.cursor.execute("""
             SELECT
-                c.html,
-                c.text,
-                c.comment_created,
-                c.post_id
+                html,
+                text,
+                comment_created,
+                post_id
             FROM
-                comments c
-            JOIN
-                posts p ON c.post_id = p.id
+                comments
             WHERE
-                p.url = ?
-        """, (post_url,))
+                post_id = ?
+        """, (post_id,))
         rows = self.cursor.fetchall()
         comments = [Comment(html=row[0], text=row[1], comment_created=row[2], post_id=row[3]) for row in rows]
+        return comments
 
     def search_posts(self, start_date: str, end_date: str, keyword: Optional[str] = None) -> List[Post]:
         """
@@ -140,19 +140,19 @@ class DatabaseManager:
         Returns:
             List[Post]: 검색 조건에 맞는 Post 객체 리스트.
         """
-        query = "SELECT title, url, content, image_urls, post_created FROM posts WHERE post_created BETWEEN ? AND ?"
-        params = (start_date, end_date)
+        query = "SELECT id, title, url, content, image_urls, post_created FROM posts WHERE post_created BETWEEN ? AND ?"
+        params = [start_date, end_date]
 
         if keyword:
             query += " AND (title LIKE ? OR content LIKE ?)"
-            params += (f'%{keyword}%', f'%{keyword}%')
+            params.extend([f'%{keyword}%', f'%{keyword}%'])
 
         self.cursor.execute(query, params)
         rows = self.cursor.fetchall()
         posts = []
         for row in rows:
-            title, url, content, image_urls_json, post_created = row
+            post_id, title, url, content, image_urls_json, post_created = row
             image_urls = json.loads(image_urls_json) if image_urls_json else []
-            posts.append(Post(title=title, url=url, content=content, image_urls=image_urls, post_created=post_created))
+            comments = self.get_comments_for_post(post_id)
+            posts.append(Post(title=title, url=url, content=content, image_urls=image_urls, post_created=post_created, comments=comments))
         return posts
-        return comments
