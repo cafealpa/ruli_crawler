@@ -79,7 +79,9 @@ class RuliwebScraper:
 
             # 게시글 제목과 내용을 추출합니다.
             title = await page.locator(".subject_inner_text").inner_text()
-            content = await page.locator(".view_content").inner_text()
+            content_element = page.locator(".view_content")
+            content = await content_element.inner_text()
+            content_html = await content_element.inner_html()
 
             # 게시글 생성일 추출 (가정: .regdate 클래스를 가진 요소에 날짜 정보가 있음)
             post_created_element = await page.query_selector(".regdate") # 실제 웹사이트의 선택자에 따라 변경 필요
@@ -128,7 +130,7 @@ class RuliwebScraper:
                     image_urls.append(img_url)
 
             # Post 객체를 생성하여 반환합니다.
-            post = Post(title=title.strip(), url=url, content=content.strip(), image_urls=image_urls, post_created=post_created)
+            post = Post(title=title.strip(), url=url, content=content.strip(), content_html=content_html, image_urls=image_urls, post_created=post_created)
         finally:
             await page.close()
 

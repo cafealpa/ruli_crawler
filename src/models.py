@@ -15,7 +15,8 @@ class Post:
     """게시글 데이터를 저장하는 데이터 클래스"""
     title: str  # 게시글 제목
     url: str  # 게시글 URL
-    content: Optional[str] = None  # 게시글 내용 (HTML 포함)
+    content: Optional[str] = None  # 게시글 내용 (텍스트만)
+    content_html: Optional[str] = None # 게시글 내용 (HTML 포함)
     image_urls: List[str] = field(default_factory=list)  # 게시글 내 이미지 URL 리스트
     post_created: Optional[str] = None  # 게시글 생성일
     comments: List['Comment'] = field(default_factory=list) # 해당 게시글의 댓글 리스트

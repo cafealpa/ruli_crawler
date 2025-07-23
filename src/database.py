@@ -39,6 +39,7 @@ class DatabaseManager:
                 title TEXT NOT NULL,
                 url TEXT UNIQUE NOT NULL,
                 content TEXT,
+                content_html TEXT,
                 image_urls TEXT,
                 post_created TEXT
             )
@@ -67,9 +68,9 @@ class DatabaseManager:
         try:
             image_urls_json = json.dumps(post.image_urls)
             self.cursor.execute("""
-                INSERT INTO posts (title, url, content, image_urls, post_created)
-                VALUES (?, ?, ?, ?, ?)
-            """, (post.title, post.url, post.content, image_urls_json, post.post_created))
+                INSERT INTO posts (title, url, content, content_html, image_urls, post_created)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (post.title, post.url, post.content, post.content_html, image_urls_json, post.post_created))
             self.conn.commit()
             return self.cursor.lastrowid
         except sqlite3.IntegrityError:
@@ -94,14 +95,14 @@ class DatabaseManager:
         Returns:
             List[Post]: 조회된 Post 객체 리스트.
         """
-        self.cursor.execute("SELECT id, title, url, content, image_urls, post_created FROM posts")
+        self.cursor.execute("SELECT id, title, url, content, content_html, image_urls, post_created FROM posts")
         rows = self.cursor.fetchall()
         posts = []
         for row in rows:
-            post_id, title, url, content, image_urls_json, post_created = row
+            post_id, title, url, content, content_html, image_urls_json, post_created = row
             image_urls = json.loads(image_urls_json) if image_urls_json else []
             comments = self.get_comments_for_post(post_id)
-            posts.append(Post(title=title, url=url, content=content, image_urls=image_urls, post_created=post_created, comments=comments))
+            posts.append(Post(title=title, url=url, content=content, content_html=content_html, image_urls=image_urls, post_created=post_created, comments=comments))
         return posts
 
     def get_comments_for_post(self, post_id: int) -> List[Comment]:
@@ -140,7 +141,7 @@ class DatabaseManager:
         Returns:
             List[Post]: 검색 조건에 맞는 Post 객체 리스트.
         """
-        query = "SELECT id, title, url, content, image_urls, post_created FROM posts WHERE post_created BETWEEN ? AND ?"
+        query = "SELECT id, title, url, content, content_html, image_urls, post_created FROM posts WHERE post_created BETWEEN ? AND ?"
         params = [start_date, end_date]
 
         if keyword:
@@ -153,8 +154,8 @@ class DatabaseManager:
         rows = self.cursor.fetchall()
         posts = []
         for row in rows:
-            post_id, title, url, content, image_urls_json, post_created = row
+            post_id, title, url, content, content_html, image_urls_json, post_created = row
             image_urls = json.loads(image_urls_json) if image_urls_json else []
             comments = self.get_comments_for_post(post_id)
-            posts.append(Post(title=title, url=url, content=content, image_urls=image_urls, post_created=post_created, comments=comments))
+            posts.append(Post(title=title, url=url, content=content, content_html=content_html, image_urls=image_urls, post_created=post_created, comments=comments))
         return posts

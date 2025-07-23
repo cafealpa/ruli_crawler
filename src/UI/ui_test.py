@@ -191,7 +191,13 @@ class RuliCrawlerUI:
             index = selected_indices[0]
             selected_post = self.current_posts[index]
             self.content_text.delete(1.0, tk.END)
-            self.content_text.insert(tk.END, selected_post.content)
+            self.content_text.insert(tk.END, selected_post.content_html)
+
+            # 댓글 목록 업데이트
+            self.comment_listbox.delete(0, tk.END) # 기존 댓글 목록 삭제
+            for i, comment in enumerate(selected_post.comments):
+                self.comment_listbox.insert(tk.END, f"{i+1}. {comment.text}")
+            self.comment_frame.config(text=f"댓글 ({len(selected_post.comments)})")
 
     def on_crawl_button_click(self):
         self.results_text.delete(1.0, tk.END)
