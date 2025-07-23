@@ -171,11 +171,18 @@ class RuliCrawlerUI:
         실제 애플리케이션에서는 이 부분에 데이터 조회 및 UI 업데이트 로직이 구현됩니다.
         """
         start_date = self.start_date_entry_data.get_date()
-        end_date = self.end_date_entry_data.get_date()
+        end_date = self.end_date_entry_data.get_date() + timedelta(days=1)
         search_text = self.title_content_search_entry.get()
-        print(f"조회 시작: {start_date} ~ {end_date}, 검색어: '{search_text}'")
-        # 여기에 실제 데이터 조회 로직을 추가합니다.
-        # 예: 데이터베이스 쿼리, API 호출 등
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        end_date_str = end_date.strftime("%Y-%m-%d")
+
+        posts = self.controller.search_posts(start_date_str, end_date_str, search_text)
+
+        self.post_listbox.delete(0, tk.END) # 기존 목록 삭제
+        for i, post in enumerate(posts):
+            self.post_listbox.insert(tk.END, f"{i+1}. {post.title}")
+
+        self.post_list_frame.config(text=f"제시글 ({len(posts)})")
 
     def on_crawl_button_click(self):
         self.results_text.delete(1.0, tk.END)

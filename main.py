@@ -1,13 +1,12 @@
-import tkinter as tk
 import os
 import sys
+import tkinter as tk
 
 # src 디렉토리를 Python 경로에 추가
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(PROJECT_ROOT, 'src'))
 
 from src.UI.ui_test import RuliCrawlerUI
-from src.controller import CrawlerController
 
 if __name__ == "__main__":
     # Tkinter UI 실행

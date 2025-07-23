@@ -4,16 +4,6 @@ from .database import DatabaseManager
 from .scraper import RuliwebScraper
 from .view import ConsoleView
 
-
-class CrawlerController:
-    """크롤러의 동작을 제어하는 클래스 (Controller 역할)"""
-    from typing import Optional, Any # Any 추가
-
-from .database import DatabaseManager
-from .scraper import RuliwebScraper
-from .view import ConsoleView
-
-
 class CrawlerController:
     """크롤러의 동작을 제어하는 클래스 (Controller 역할)"""
     def __init__(self, limit: int, headless: bool, db_path: str, view: Any = None):
