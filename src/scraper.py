@@ -1,8 +1,9 @@
 import asyncio
 import re
+from typing import List, Tuple
 
-from playwright.async_api import async_playwright, Page
-from typing import List, Optional, Tuple
+from playwright.async_api import async_playwright
+
 from .models import Post, Comment
 
 
@@ -123,12 +124,12 @@ class RuliwebScraper:
                     if img_url and not img_url.startswith('http'):
                         img_url = "https://" + img_url.lstrip('/')
                     image_urls.append(img_url)
+
+            # Post 객체를 생성하여 반환합니다.
+            post = Post(title=title.strip(), url=url, content=content.strip(), image_urls=image_urls, post_created=post_created)
         finally:
             await page.close()
 
-
-        # Post 객체를 생성하여 반환합니다.
-        post = Post(title=title.strip(), url=url, content=content.strip(), image_urls=image_urls, post_created=post_created)
         return post, comments
 
 
