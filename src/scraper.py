@@ -11,7 +11,7 @@ class RuliwebScraper:
     """Playwright를 사용하여 Ruliweb 게시글을 스크랩하는 클래스"""
     BASE_URL = "https://m.ruliweb.com"
 
-    def __init__(self, headless: bool = True):
+    def __init__(self, headless: bool = False):
         """RuliwebScraper를 초기화합니다.
 
         Args:
@@ -93,15 +93,23 @@ class RuliwebScraper:
             # 댓글을 추출합니다.
             comments = []
             try:
-                # 댓글 영역이 로드될 때까지 최대 5초 대기
-                await page.wait_for_selector(".comment_view", timeout=5000)
+                # 페이지 끝까지 스크롤하여 모든 댓글 로드
+                last_height = await page.evaluate("document.body.scrollHeight")
+                while True:
+                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    await asyncio.sleep(1) # 스크롤 후 로드를 기다림
+                    new_height = await page.evaluate("document.body.scrollHeight")
+                    if new_height == last_height:
+                        break
+                    last_height = new_height
+
                 comments_elements = await page.query_selector_all(".comment_view.normal .comment_element.normal")
 
                 for comment in comments_elements:
                     # HTML 정제: 모든 공백(탭, 줄바꿈 등)을 하나의 공백으로 변경
                     raw_html = await comment.inner_html()
                     # comment_html = re.sub(r'\s+', ' ', raw_html).strip()
-                    comment_html = raw_html.replace('\n').replace('\t').strip()
+                    comment_html = raw_html.replace('\n', '').replace('\t', '').strip()
 
                     comment_p_text = await comment.query_selector("p.text")
                     comment_text = await comment_p_text.inner_text()
@@ -115,7 +123,8 @@ class RuliwebScraper:
 
                     comments.append(Comment(html=comment_html, text=comment_text, comment_created=comment_created))
 
-            except Exception:
+            except Exception as e:
+                print(f'댓글을 분석중에 오류가 발생하였습니다. {e}')
                 # 댓글이 없거나 로드에 실패하면 무시하고 계속 진행
                 pass
 

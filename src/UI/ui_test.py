@@ -4,6 +4,7 @@ import threading
 import asyncio
 from datetime import datetime, timedelta
 from tkcalendar import DateEntry # tkcalendar 임포트 추가
+from tkhtmlview import HTMLLabel # HTMLLabel 임포트 추가
 
 from src.controller import CrawlerController
 from src.models import Post, Comment # Post, Comment 임포트 추가
@@ -53,7 +54,7 @@ class RuliCrawlerUI:
         self.tkinter_view = TkinterView(self.results_text, self.master.after)
 
         # Controller 초기화 (db_path는 실제 경로로 설정 필요)
-        self.controller = CrawlerController(limit=10, headless=True, db_path=db_path, view=self.tkinter_view)
+        self.controller = CrawlerController(limit=10, headless=False, db_path=db_path, view=self.tkinter_view)
 
     def create_widgets(self):
         # 크롤링 탭 UI 요소
@@ -143,12 +144,9 @@ class RuliCrawlerUI:
         self.content_frame = ttk.LabelFrame(self.right_paned_window, text="내용 (HTML)", padding="10")
         self.right_paned_window.add(self.content_frame, weight=3)
 
-        # 게시글 내용을 표시하는 Text 위젯 (HTML 내용을 가정)
-        self.content_text = tk.Text(self.content_frame, wrap=tk.WORD)
+        # 게시글 내용을 표시하는 HTMLLabel 위젯
+        self.content_text = HTMLLabel(self.content_frame, html="")
         self.content_text.pack(fill=tk.BOTH, expand=True, pady=(0, 0))
-        content_text_scrollbar = ttk.Scrollbar(self.content_frame, orient="vertical", command=self.content_text.yview)
-        content_text_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.content_text.config(yscrollcommand=content_text_scrollbar.set)
 
         # 댓글 영역 프레임 (오른쪽 영역)
         self.comment_frame = ttk.LabelFrame(self.right_paned_window, text="댓글 (0)", padding="10")
@@ -190,8 +188,7 @@ class RuliCrawlerUI:
         if selected_indices:
             index = selected_indices[0]
             selected_post = self.current_posts[index]
-            self.content_text.delete(1.0, tk.END)
-            self.content_text.insert(tk.END, selected_post.content_html)
+            self.content_text.set_html(selected_post.content_html)
 
             # 댓글 목록 업데이트
             self.comment_listbox.delete(0, tk.END) # 기존 댓글 목록 삭제
