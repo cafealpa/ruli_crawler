@@ -116,22 +116,22 @@ class RuliCrawlerUI:
         self.main_content_frame = ttk.Frame(self.data_tab, padding="10 0 10 10")
         self.main_content_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        # PanedWindow 생성: 제시글 목록과 내용/댓글 창 사이의 크기를 조절할 수 있도록 합니다.
+        # PanedWindow 생성: 게시글 목록과 내용/댓글 창 사이의 크기를 조절할 수 있도록 합니다.
         self.left_paned_window = ttk.PanedWindow(self.main_content_frame, orient=tk.HORIZONTAL)
         self.left_paned_window.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # 제시글 목록 프레임 (왼쪽 영역)
-        self.post_list_frame = ttk.LabelFrame(self.left_paned_window, text="제시글 (0)", padding="10")
+        # 게시글 목록 프레임 (왼쪽 영역)
+        self.post_list_frame = ttk.LabelFrame(self.left_paned_window, text="게시글 (0)", padding="10")
         self.left_paned_window.add(self.post_list_frame, weight=1)
         self.post_list_frame.config(width=200)
         self.post_list_frame.pack_propagate(False)
 
-        # 제시글 목록을 표시하는 Listbox 위젯
+        # 게시글 목록을 표시하는 Listbox 위젯
         self.post_listbox = tk.Listbox(self.post_list_frame, height=20)
         self.post_listbox.pack(fill=tk.BOTH, expand=True)
         self.post_listbox.bind('<<ListboxSelect>>', self.on_post_select)
 
-        # 제시글 목록 스크롤바
+        # 게시글 목록 스크롤바
         post_list_scrollbar = ttk.Scrollbar(self.post_list_frame, orient="vertical", command=self.post_listbox.yview)
         post_list_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.post_listbox.config(yscrollcommand=post_list_scrollbar.set)
@@ -181,7 +181,7 @@ class RuliCrawlerUI:
         for i, post in enumerate(self.current_posts):
             self.post_listbox.insert(tk.END, f"{i+1}. {post.title}")
 
-        self.post_list_frame.config(text=f"제시글 ({len(self.current_posts)})")
+        self.post_list_frame.config(text=f"게시글 ({len(self.current_posts)})")
 
     def on_post_select(self, event):
         selected_indices = self.post_listbox.curselection()
