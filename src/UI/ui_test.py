@@ -128,6 +128,7 @@ class RuliCrawlerUI:
         # 제시글 목록을 표시하는 Listbox 위젯
         self.post_listbox = tk.Listbox(self.post_list_frame, height=20)
         self.post_listbox.pack(fill=tk.BOTH, expand=True)
+        self.post_listbox.bind('<<ListboxSelect>>', self.on_post_select)
 
         # 제시글 목록 스크롤바
         post_list_scrollbar = ttk.Scrollbar(self.post_list_frame, orient="vertical", command=self.post_listbox.yview)
@@ -176,13 +177,21 @@ class RuliCrawlerUI:
         start_date_str = start_date.strftime("%Y-%m-%d")
         end_date_str = end_date.strftime("%Y-%m-%d")
 
-        posts = self.controller.search_posts(start_date_str, end_date_str, search_text)
+        self.current_posts = self.controller.search_posts(start_date_str, end_date_str, search_text)
 
         self.post_listbox.delete(0, tk.END) # 기존 목록 삭제
-        for i, post in enumerate(posts):
+        for i, post in enumerate(self.current_posts):
             self.post_listbox.insert(tk.END, f"{i+1}. {post.title}")
 
-        self.post_list_frame.config(text=f"제시글 ({len(posts)})")
+        self.post_list_frame.config(text=f"제시글 ({len(self.current_posts)})")
+
+    def on_post_select(self, event):
+        selected_indices = self.post_listbox.curselection()
+        if selected_indices:
+            index = selected_indices[0]
+            selected_post = self.current_posts[index]
+            self.content_text.delete(1.0, tk.END)
+            self.content_text.insert(tk.END, selected_post.content)
 
     def on_crawl_button_click(self):
         self.results_text.delete(1.0, tk.END)
