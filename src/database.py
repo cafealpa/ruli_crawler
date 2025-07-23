@@ -39,14 +39,17 @@ class DatabaseManager:
                 title TEXT NOT NULL,
                 url TEXT UNIQUE NOT NULL,
                 content TEXT,
-                image_urls TEXT
+                image_urls TEXT,
+                post_created TEXT
             )
         """)
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS comments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 post_id INTEGER NOT NULL,
-                text TEXT NOT NULL,
+                html TEXT,
+                text TEXT,
+                comment_created TEXT,
                 FOREIGN KEY (post_id) REFERENCES posts (id)
             )
         """)
@@ -64,9 +67,9 @@ class DatabaseManager:
         try:
             image_urls_json = json.dumps(post.image_urls)
             self.cursor.execute("""
-                INSERT INTO posts (title, url, content, image_urls)
-                VALUES (?, ?, ?, ?)
-            """, (post.title, post.url, post.content, image_urls_json))
+                INSERT INTO posts (title, url, content, image_urls, post_created)
+                VALUES (?, ?, ?, ?, ?)
+            """, (post.title, post.url, post.content, image_urls_json, post.post_created))
             self.conn.commit()
             return self.cursor.lastrowid
         except sqlite3.IntegrityError:
@@ -80,9 +83,9 @@ class DatabaseManager:
             comment (Comment): 삽입할 댓글 Comment 객체. post_id를 포함해야 합니다.
         """
         self.cursor.execute("""
-            INSERT INTO comments (post_id, text)
-            VALUES (?, ?)
-        """, (comment.post_id, comment.text))
+            INSERT INTO comments (post_id, html, text, comment_created)
+            VALUES (?, ?, ?, ?)
+        """, (comment.post_id, comment.html, comment.text, comment.comment_created))
         self.conn.commit()
 
     def get_all_posts(self) -> List[Post]:
@@ -91,13 +94,13 @@ class DatabaseManager:
         Returns:
             List[Post]: 조회된 Post 객체 리스트.
         """
-        self.cursor.execute("SELECT title, url, content, image_urls FROM posts")
+        self.cursor.execute("SELECT title, url, content, image_urls, post_created FROM posts")
         rows = self.cursor.fetchall()
         posts = []
         for row in rows:
-            title, url, content, image_urls_json = row
+            title, url, content, image_urls_json, post_created = row
             image_urls = json.loads(image_urls_json) if image_urls_json else []
-            posts.append(Post(title=title, url=url, content=content, image_urls=image_urls))
+            posts.append(Post(title=title, url=url, content=content, image_urls=image_urls, post_created=post_created))
         return posts
 
     def get_comments_for_post(self, post_url: str) -> List[Comment]:
@@ -109,7 +112,47 @@ class DatabaseManager:
         Returns:
             List[Comment]: 조회된 Comment 객체 리스트.
         """
-        self.cursor.execute("SELECT text FROM comments WHERE post_url = ?", (post_url,))
+        self.cursor.execute("""
+            SELECT
+                c.html,
+                c.text,
+                c.comment_created,
+                c.post_id
+            FROM
+                comments c
+            JOIN
+                posts p ON c.post_id = p.id
+            WHERE
+                p.url = ?
+        """, (post_url,))
         rows = self.cursor.fetchall()
-        comments = [Comment(post_url=post_url, text=row[0]) for row in rows]
+        comments = [Comment(html=row[0], text=row[1], comment_created=row[2], post_id=row[3]) for row in rows]
+
+    def search_posts(self, start_date: str, end_date: str, keyword: Optional[str] = None) -> List[Post]:
+        """
+        지정된 기간 내에 생성된 게시글을 검색하고, 선택적으로 키워드를 사용하여 제목 또는 내용으로 필터링합니다.
+
+        Args:
+            start_date (str): 검색 시작 날짜 (YYYY-MM-DD 형식).
+            end_date (str): 검색 종료 날짜 (YYYY-MM-DD 형식).
+            keyword (Optional[str]): 제목 또는 내용에서 검색할 키워드.
+
+        Returns:
+            List[Post]: 검색 조건에 맞는 Post 객체 리스트.
+        """
+        query = "SELECT title, url, content, image_urls, post_created FROM posts WHERE post_created BETWEEN ? AND ?"
+        params = (start_date, end_date)
+
+        if keyword:
+            query += " AND (title LIKE ? OR content LIKE ?)"
+            params += (f'%{keyword}%', f'%{keyword}%')
+
+        self.cursor.execute(query, params)
+        rows = self.cursor.fetchall()
+        posts = []
+        for row in rows:
+            title, url, content, image_urls_json, post_created = row
+            image_urls = json.loads(image_urls_json) if image_urls_json else []
+            posts.append(Post(title=title, url=url, content=content, image_urls=image_urls, post_created=post_created))
+        return posts
         return comments

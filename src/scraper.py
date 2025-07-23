@@ -1,8 +1,10 @@
-
 import asyncio
+import re
+
 from playwright.async_api import async_playwright, Page
 from typing import List, Optional, Tuple
 from .models import Post, Comment
+
 
 class RuliwebScraper:
     """Playwright를 사용하여 Ruliweb 게시글을 스크랩하는 클래스"""
@@ -44,7 +46,7 @@ class RuliwebScraper:
         page = await self.browser.new_page()
         await page.goto(board_url)
         await page.wait_for_selector("tr.table_body.blocktarget")
-        
+
         posts = await page.query_selector_all("tr.table_body.blocktarget")
         urls = []
         for i, post in enumerate(posts):
@@ -69,37 +71,64 @@ class RuliwebScraper:
             Tuple[Post, List[Comment]]: 스크랩된 Post 객체와 Comment 객체 리스트.
         """
         page = await self.browser.new_page()
-        await page.goto(url)
-        await page.wait_for_load_state('domcontentloaded')
 
-        # 게시글 제목과 내용을 추출합니다.
-        title = await page.locator(".subject_inner_text").inner_text()
-        content = await page.locator(".view_content").inner_text()
-        
-        # 댓글을 추출합니다.
-        comments = []
         try:
-            # 댓글 영역이 로드될 때까지 최대 5초 대기
-            await page.wait_for_selector(".comment_view", timeout=5000)
-            comments_elements = await page.query_selector_all(".comment_view p.text")
-            comments = [Comment(text=await comment.inner_html()) for comment in comments_elements]
-        except Exception:
-            # 댓글이 없거나 로드에 실패하면 무시하고 계속 진행
-            pass
+            await page.goto(url)
+            await page.wait_for_load_state('domcontentloaded')
 
-        # 이미지 URL을 추출합니다.
-        images = await page.query_selector_all(".view_content img")
-        image_urls = []
-        if images:
-            for img in images:
-                img_url = await img.get_attribute("src")
-                if img_url and not img_url.startswith('http'):
-                    img_url = "https://" + img_url.lstrip('/')
-                image_urls.append(img_url)
+            # 게시글 제목과 내용을 추출합니다.
+            title = await page.locator(".subject_inner_text").inner_text()
+            content = await page.locator(".view_content").inner_text()
 
-        await page.close()
+            # 게시글 생성일 추출 (가정: .regdate 클래스를 가진 요소에 날짜 정보가 있음)
+            post_created_element = await page.query_selector(".regdate") # 실제 웹사이트의 선택자에 따라 변경 필요
+            post_created = await post_created_element.inner_text() if post_created_element else None
+            if post_created:
+                post_created = post_created.strip()
+
+            # 댓글을 추출합니다.
+            comments = []
+            try:
+                # 댓글 영역이 로드될 때까지 최대 5초 대기
+                await page.wait_for_selector(".comment_view", timeout=5000)
+                comments_elements = await page.query_selector_all(".comment_view.normal .comment_element.normal")
+
+                for comment in comments_elements:
+                    # HTML 정제: 모든 공백(탭, 줄바꿈 등)을 하나의 공백으로 변경
+                    raw_html = await comment.inner_html()
+                    comment_html = re.sub(r'\s+', ' ', raw_html).strip()
+
+                    comment_p_text = await comment.query_selector("p.text")
+                    comment_text = await comment_p_text.inner_text()
+
+                    comment_created_element = await comment.query_selector(".comment_info .date") # 실제 웹사이트의 선택자에 따라 변경 필요
+                    comment_created = await comment_created_element.inner_text() if comment_created_element else None
+                    if comment_created:
+                        comment_created = comment_created.strip()
+
+                    print(Comment(html=comment_html, text=comment_text, comment_created=comment_created))
+
+                    comments.append(Comment(html=comment_html, text=comment_text, comment_created=comment_created))
+
+            except Exception:
+                # 댓글이 없거나 로드에 실패하면 무시하고 계속 진행
+                pass
+
+            # 이미지 URL을 추출합니다.
+            images = await page.query_selector_all(".view_content img")
+            image_urls = []
+            if images:
+                for img in images:
+                    img_url = await img.get_attribute("src")
+                    if img_url and not img_url.startswith('http'):
+                        img_url = "https://" + img_url.lstrip('/')
+                    image_urls.append(img_url)
+        finally:
+            await page.close()
+
+
         # Post 객체를 생성하여 반환합니다.
-        post = Post(title=title.strip(), url=url, content=content.strip(), image_urls=image_urls)
+        post = Post(title=title.strip(), url=url, content=content.strip(), image_urls=image_urls, post_created=post_created)
         return post, comments
 
 
@@ -119,10 +148,12 @@ async def main():
             print(f"URL: {post.url}")
             print(f"내용: {post.content[:200]}...")
             print(f"이미지 URL: {post.image_urls}")
+            print(f"생성일: {post.post_created}")
             print("댓글:")
             for comment in comments:
-                print(f"- {comment.text}") # 댓글 HTML이 길 수 있으므로 일부만 출력
+                print(f"- {comment.text} (생성일: {comment.comment_created})")  # 댓글 HTML이 길 수 있으므로 일부만 출력
             print("-" * 20)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

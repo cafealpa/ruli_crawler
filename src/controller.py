@@ -51,3 +51,18 @@ class CrawlerController:
         self.db_manager.close()
         self.view.show_message("크롤링이 완료되었습니다.")
 
+    def search_and_display_posts(self, start_date: str, end_date: str, keyword: Optional[str] = None):
+        """
+        지정된 기간과 키워드로 게시글을 검색하고 결과를 콘솔에 출력합니다.
+
+        Args:
+            start_date (str): 검색 시작 날짜 (YYYY-MM-DD 형식).
+            end_date (str): 검색 종료 날짜 (YYYY-MM-DD 형식).
+            keyword (Optional[str]): 제목 또는 내용에서 검색할 키워드.
+        """
+        self.view.show_message(f"게시글 검색 중: 기간 {start_date} ~ {end_date}, 키워드 '{keyword if keyword else '없음'}'")
+        self.db_manager.connect()
+        posts = self.db_manager.search_posts(start_date, end_date, keyword)
+        self.db_manager.close()
+        self.view.display_search_results(posts, start_date, end_date, keyword)
+
