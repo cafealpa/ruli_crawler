@@ -34,25 +34,26 @@ class RuliwebScraper:
         if self.playwright:
             await self.playwright.stop()
 
-    async def get_post_urls(self, board_url: str, limit: int) -> List[str]:
+    async def get_post_urls(self, board_url: str) -> List[str]:
         """주어진 게시판 URL에서 게시글 URL 목록을 스크랩합니다.
 
         Args:
             board_url (str): 게시글 URL을 수집할 게시판의 URL.
-            limit (int): 수집할 게시글 URL의 최대 개수.
 
         Returns:
             List[str]: 수집된 게시글 URL 문자열 리스트.
         """
         page = await self.browser.new_page()
-        await page.goto(board_url)
-        await page.wait_for_selector("tr.table_body.blocktarget")
+        try:
+            await page.goto(board_url)
+            await page.wait_for_selector("tr.table_body.blocktarget", timeout=5000) # 5초 타임아웃
+        except Exception:
+            await page.close()
+            return [] # 선택자를 찾지 못하면 빈 리스트 반환
 
         posts = await page.query_selector_all("tr.table_body.blocktarget")
         urls = []
-        for i, post in enumerate(posts):
-            if i >= limit:
-                break
+        for post in posts:
             title_element = await post.query_selector("a.subject_link")
             if title_element:
                 url = await title_element.get_attribute("href")
@@ -74,8 +75,8 @@ class RuliwebScraper:
         page = await self.browser.new_page()
 
         try:
-            await page.goto(url)
-            await page.wait_for_load_state('domcontentloaded')
+            await page.goto(url, timeout=60000)  # 페이지 로드 타임아웃을 60초로 늘림
+            await page.wait_for_selector(".subject_inner_text", timeout=30000)  # 특정 요소가 나타날 때까지 대기
 
             # 게시글 제목과 내용을 추출합니다.
             title = await page.locator(".subject_inner_text").inner_text()
@@ -173,10 +174,10 @@ async def main():
     scraper = RuliwebScraper()
     async with scraper:
         print("게시글 URL 수집 중...")
-        post_urls = await scraper.get_post_urls("https://m.ruliweb.com/best/humor_only", 5)
+        post_urls = await scraper.get_post_urls("https://m.ruliweb.com/best/humor_only")
         print(f"수집된 게시글 URL: {post_urls}")
 
-        for url in post_urls:
+        for url in post_urls[:3]: # 처음 3개만 테스트
             print()
             print(f"게시글 상세 정보 스크랩 중: {url}")
             post, comments = await scraper.get_post_details(url)

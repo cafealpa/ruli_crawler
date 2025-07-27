@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 import threading
 import asyncio
+import queue
 from datetime import datetime, timedelta
 from tkcalendar import DateEntry # tkcalendar 임포트 추가
 from tkhtmlview import HTMLLabel # HTMLLabel 임포트 추가
@@ -11,32 +12,28 @@ from src.models import Post, Comment # Post, Comment 임포트 추가
 
 # Tkinter UI에 메시지를 표시하기 위한 View 클래스
 class TkinterView:
-    def __init__(self, text_widget, master_after_method):
-        self.text_widget = text_widget
-        self.master_after_method = master_after_method
+    def __init__(self, message_queue):
+        self.message_queue = message_queue
 
     def show_message(self, message):
-        self.master_after_method(0, lambda: self._insert_text(message + "\n"))
+        self.message_queue.put(message + "\n")
 
     def display_post(self, post: Post):
         message = f"\n--- 새 게시글 ---\n제목: {post.title}\nURL: {post.url}\n생성일: {post.post_created}\n내용: {post.content[:100]}...\n"
-        self.master_after_method(0, lambda: self._insert_text(message))
+        self.message_queue.put(message)
 
     def display_comments(self, comments: list[Comment]):
         if comments:
             message = "댓글:\n"
             for comment in comments:
                 message += f"- {comment.text[:50]}... (생성일: {comment.comment_created})\n"
-            self.master_after_method(0, lambda: self._insert_text(message))
-
-    def _insert_text(self, text):
-        self.text_widget.insert(tk.END, text)
-        self.text_widget.see(tk.END) # 스크롤을 항상 아래로
+            self.message_queue.put(message)
 
 class RuliCrawlerUI:
     def __init__(self, master, db_path):
         self.master = master
         master.title("Ruliweb Crawler UI")
+        self.is_crawling = False
 
         self.notebook = ttk.Notebook(master)
         self.notebook.pack(expand=True, fill="both", padx=5, pady=5)
@@ -47,31 +44,33 @@ class RuliCrawlerUI:
         self.notebook.add(self.crawl_tab, text="크롤링")
         self.notebook.add(self.data_tab, text="데이터 확인")
 
+        # 메시지 큐 생성
+        self.message_queue = queue.Queue()
+
         # UI 요소 배치
         self.create_widgets()
 
         # TkinterView 인스턴스 생성
-        self.tkinter_view = TkinterView(self.results_text, self.master.after)
+        self.tkinter_view = TkinterView(self.message_queue)
 
-        # Controller 초기화 (db_path는 실제 경로로 설정 필요)
-        self.controller = CrawlerController(limit=10, headless=False, db_path=db_path, view=self.tkinter_view)
+        # Controller 초기화
+        self.controller = CrawlerController(limit=30, headless=False, db_path=db_path, view=self.tkinter_view)
+
+        # 큐 폴링 시작
+        self.master.after(100, self.process_queue)
 
     def create_widgets(self):
         # 크롤링 탭 UI 요소
-        # 크롤링 시작 버튼
-        self.crawl_button = ttk.Button(self.crawl_tab, text="크롤링 시작", command=self.on_crawl_button_click)
+        self.crawl_button = ttk.Button(self.crawl_tab, text="크롤링 시작", command=self.toggle_crawling)
         self.crawl_button.grid(row=0, column=0, padx=5, pady=5)
 
-        # 결과 표시 텍스트 영역
         self.results_text = tk.Text(self.crawl_tab, wrap=tk.WORD, width=80, height=20)
         self.results_text.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
 
-        # 스크롤바 추가
         self.scrollbar = ttk.Scrollbar(self.crawl_tab, command=self.results_text.yview)
         self.scrollbar.grid(row=1, column=2, sticky="ns")
         self.results_text.config(yscrollcommand=self.scrollbar.set)
 
-        # 그리드 가중치 설정 (창 크기 조절 시 위젯 크기 조절)
         self.crawl_tab.grid_rowconfigure(1, weight=1)
         self.crawl_tab.grid_columnconfigure(0, weight=1)
 
@@ -154,20 +153,33 @@ class RuliCrawlerUI:
         self.comment_frame.config(width=200)
         self.comment_frame.pack_propagate(False)
 
-        # 댓글 목록을 표시하는 Listbox 위젯
-        self.comment_listbox = tk.Listbox(self.comment_frame, height=20)
-        self.comment_listbox.pack(fill=tk.BOTH, expand=True)
+        # 댓글 내용을 표시하는 Text 위젯
+        self.comment_text_widget = tk.Text(self.comment_frame, wrap=tk.WORD, height=20)
+        self.comment_text_widget.pack(fill=tk.BOTH, expand=True)
 
-        # 댓글 목록 스크롤바
-        comment_list_scrollbar = ttk.Scrollbar(self.comment_frame, orient="vertical", command=self.comment_listbox.yview)
+        # 태그 설정
+        self.comment_text_widget.tag_configure("comment_header", font=("맑은 고딕", 9, "bold"))
+        self.comment_text_widget.tag_configure("comment_body", font=("맑은 고딕", 9))
+        self.comment_text_widget.tag_configure("separator", background="#e0e0e0") # 회색 배경으로 구분선
+
+        # 댓글 내용 스크롤바
+        comment_list_scrollbar = ttk.Scrollbar(self.comment_frame, orient="vertical", command=self.comment_text_widget.yview)
         comment_list_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.comment_listbox.config(yscrollcommand=comment_list_scrollbar.set)
+        self.comment_text_widget.config(yscrollcommand=comment_list_scrollbar.set)
+
+    def process_queue(self):
+        try:
+            message = self.message_queue.get_nowait()
+            self.results_text.insert(tk.END, message)
+            self.results_text.see(tk.END)
+        except queue.Empty:
+            pass
+        finally:
+            self.master.after(100, self.process_queue)
 
     def perform_query(self):
         """
         '조회' 버튼 클릭 시 호출되는 메서드입니다.
-        현재는 선택된 날짜와 검색어를 콘솔에 출력하는 더미 기능만 포함합니다.
-        실제 애플리케이션에서는 이 부분에 데이터 조회 및 UI 업데이트 로직이 구현됩니다.
         """
         start_date = self.start_date_entry_data.get_date()
         end_date = self.end_date_entry_data.get_date() + timedelta(days=1)
@@ -177,7 +189,7 @@ class RuliCrawlerUI:
 
         self.current_posts = self.controller.search_posts(start_date_str, end_date_str, search_text)
 
-        self.post_listbox.delete(0, tk.END) # 기존 목록 삭제
+        self.post_listbox.delete(0, tk.END)
         for i, post in enumerate(self.current_posts):
             self.post_listbox.insert(tk.END, f"{i+1}. {post.title}")
 
@@ -190,35 +202,55 @@ class RuliCrawlerUI:
             selected_post = self.current_posts[index]
             self.content_text.set_html(selected_post.content_html)
 
-            # 댓글 목록 업데이트
-            self.comment_listbox.delete(0, tk.END) # 기존 댓글 목록 삭제
-            for i, comment in enumerate(selected_post.comments):
-                self.comment_listbox.insert(tk.END, f"{i+1}. {comment.text}")
+            self.comment_text_widget.delete(1.0, tk.END) # 기존 댓글 삭제
+            if selected_post.comments:
+                for i, comment in enumerate(selected_post.comments):
+                    self.comment_text_widget.insert(tk.END, f"--- 댓글 {i+1} ---\n", "comment_header")
+                    self.comment_text_widget.insert(tk.END, f"작성일: {comment.comment_created}\n", "comment_header")
+                    self.comment_text_widget.insert(tk.END, f"{comment.text}\n\n", "comment_body")
+                    if i < len(selected_post.comments) - 1:
+                        self.comment_text_widget.insert(tk.END, "----------------------------------------\n", "separator")
+            else:
+                self.comment_text_widget.insert(tk.END, "댓글이 없습니다.\n")
             self.comment_frame.config(text=f"댓글 ({len(selected_post.comments)})")
 
-    def on_crawl_button_click(self):
-        self.results_text.delete(1.0, tk.END)
-        self.results_text.insert(tk.END, "크롤링을 시작합니다...\n")
-        self.crawl_button.config(state=tk.DISABLED) # 버튼 비활성화
+    def toggle_crawling(self):
+        if not self.is_crawling:
+            self.start_crawling()
+        else:
+            self.stop_crawling()
 
-        # 크롤링 작업을 별도의 스레드에서 실행
-        crawl_thread = threading.Thread(target=self._perform_crawl)
-        crawl_thread.start()
+    def start_crawling(self):
+        self.is_crawling = True
+        self.results_text.delete(1.0, tk.END)
+        self.message_queue.put("크롤링을 시작합니다...\n")
+        self.crawl_button.config(text="크롤링 중지")
+
+        self.crawl_thread = threading.Thread(target=self._perform_crawl, daemon=True)
+        self.crawl_thread.start()
+
+    def stop_crawling(self):
+        self.message_queue.put("크롤링 중지를 요청합니다...\n")
+        self.controller.request_stop()
+        self.crawl_button.config(state=tk.DISABLED) # 중지 요청 후 잠시 비활성화
 
     def _perform_crawl(self):
         try:
-            # asyncio 이벤트 루프를 새 스레드에서 실행
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.controller.run())
-            loop.close()
-            self.master.after(0, lambda: self.results_text.insert(tk.END, "크롤링이 완료되었습니다.\n"))
+            asyncio.run(self.controller.run())
         except Exception as e:
-            self.master.after(0, lambda e=e: self.results_text.insert(tk.END, f"크롤링 중 오류 발생: {e}\n"))
+            self.message_queue.put(f"크롤링 중 오류 발생: {e}\n")
         finally:
-            self.master.after(0, lambda: self.crawl_button.config(state=tk.NORMAL)) # 버튼 다시 활성화
+            self.master.after(0, self.on_crawl_finished)
+
+    def on_crawl_finished(self):
+        self.is_crawling = False
+        self.crawl_button.config(text="크롤링 시작", state=tk.NORMAL)
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = RuliCrawlerUI(root)
+    # db_path를 main.py에서처럼 적절히 설정해야 합니다.
+    # 이 파일이 직접 실행될 경우를 대비한 임시 경로입니다.
+    import os
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'ruliweb_posts.db')
+    app = RuliCrawlerUI(root, db_path=db_path)
     root.mainloop()

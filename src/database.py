@@ -13,27 +13,31 @@ class DatabaseManager:
             db_path (str): SQLite 데이터베이스 파일의 경로.
         """
         self.db_path = db_path
-        self.conn = None
-        self.cursor = None
 
-    def connect(self):
-        """데이터베이스에 연결합니다."""
-        self.conn = sqlite3.connect(self.db_path)
-        self.cursor = self.conn.cursor()
-
-    def close(self):
-        """데이터베이스 연결을 닫습니다."""
-        if self.conn:
-            self.conn.close()
+    def _execute(self, query, params=(), fetch=None):
+        """데이터베이스 연결, 실행, 커밋 및 연결 닫기를 한 번에 처리합니다."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            if fetch == 'one':
+                return cursor.fetchone()
+            if fetch == 'all':
+                return cursor.fetchall()
+            if query.strip().upper().startswith('INSERT'):
+                return cursor.lastrowid
+            return None
 
     def create_tables(self):
-        """posts 및 comments 테이블을 생성합니다.
-        기존 테이블이 있다면 삭제 후 새로 생성합니다.
-        comments 테이블은 posts 테이블의 id를 외래 키로 참조합니다.
-        """
-        self.cursor.execute("DROP TABLE IF EXISTS posts;")
-        self.cursor.execute("DROP TABLE IF EXISTS comments;")
-        self.cursor.execute("""
+        """posts 및 comments 테이블을 생성합니다."""
+        # DROP 문은 별도로 실행
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DROP TABLE IF EXISTS comments;")
+            cursor.execute("DROP TABLE IF EXISTS posts;")
+            conn.commit()
+
+        create_posts_query = """
             CREATE TABLE IF NOT EXISTS posts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
@@ -43,8 +47,8 @@ class DatabaseManager:
                 image_urls TEXT,
                 post_created TEXT
             )
-        """)
-        self.cursor.execute("""
+        """
+        create_comments_query = """
             CREATE TABLE IF NOT EXISTS comments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 post_id INTEGER NOT NULL,
@@ -53,94 +57,52 @@ class DatabaseManager:
                 comment_created TEXT,
                 FOREIGN KEY (post_id) REFERENCES posts (id)
             )
-        """)
-        self.conn.commit()
+        """
+        self._execute(create_posts_query)
+        self._execute(create_comments_query)
 
     def insert_post(self, post: Post) -> Optional[int]:
-        """게시글 데이터를 데이터베이스에 삽입합니다.
-
-        Args:
-            post (Post): 삽입할 게시글 Post 객체.
-
-        Returns:
-            Optional[int]: 삽입된 게시글의 ID (Primary Key). 이미 존재하는 경우 None을 반환합니다.
+        """게시글 데이터를 데이터베이스에 삽입합니다."""
+        query = """
+            INSERT INTO posts (title, url, content, content_html, image_urls, post_created)
+            VALUES (?, ?, ?, ?, ?, ?)
         """
+        image_urls_json = json.dumps(post.image_urls)
+        params = (post.title, post.url, post.content, post.content_html, image_urls_json, post.post_created)
         try:
-            image_urls_json = json.dumps(post.image_urls)
-            self.cursor.execute("""
-                INSERT INTO posts (title, url, content, content_html, image_urls, post_created)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (post.title, post.url, post.content, post.content_html, image_urls_json, post.post_created))
-            self.conn.commit()
-            return self.cursor.lastrowid
+            return self._execute(query, params)
         except sqlite3.IntegrityError:
-            # URL이 이미 존재하는 경우 (UNIQUE 제약 조건 위반)
-            return None # 이미 존재하는 게시글은 무시
+            return None
 
     def insert_comment(self, comment: Comment):
-        """댓글 데이터를 데이터베이스에 삽입합니다.
-
-        Args:
-            comment (Comment): 삽입할 댓글 Comment 객체. post_id를 포함해야 합니다.
-        """
-        self.cursor.execute("""
+        """댓글 데이터를 데이터베이스에 삽입합니다."""
+        query = """
             INSERT INTO comments (post_id, html, text, comment_created)
             VALUES (?, ?, ?, ?)
-        """, (comment.post_id, comment.html, comment.text, comment.comment_created))
-        self.conn.commit()
+        """
+        params = (comment.post_id, comment.html, comment.text, comment.comment_created)
+        self._execute(query, params)
 
     def get_all_posts(self) -> List[Post]:
-        """데이터베이스에서 모든 게시글을 조회합니다.
-
-        Returns:
-            List[Post]: 조회된 Post 객체 리스트.
-        """
-        self.cursor.execute("SELECT id, title, url, content, content_html, image_urls, post_created FROM posts")
-        rows = self.cursor.fetchall()
+        """데이터베이스에서 모든 게시글을 조회합니다."""
+        query = "SELECT id, title, url, content, content_html, image_urls, post_created FROM posts"
+        rows = self._execute(query, fetch='all')
         posts = []
         for row in rows:
             post_id, title, url, content, content_html, image_urls_json, post_created = row
             image_urls = json.loads(image_urls_json) if image_urls_json else []
             comments = self.get_comments_for_post(post_id)
-            posts.append(Post(title=title, url=url, content=content, content_html=content_html, image_urls=image_urls, post_created=post_created, comments=comments))
+            posts.append(Post(id=post_id, title=title, url=url, content=content, content_html=content_html, image_urls=image_urls, post_created=post_created, comments=comments))
         return posts
 
     def get_comments_for_post(self, post_id: int) -> List[Comment]:
-        """특정 게시글의 댓글을 조회합니다.
-
-        Args:
-            post_id (int): 댓글을 조회할 게시글의 ID.
-
-        Returns:
-            List[Comment]: 조회된 Comment 객체 리스트.
-        """
-        self.cursor.execute("""
-            SELECT
-                html,
-                text,
-                comment_created,
-                post_id
-            FROM
-                comments
-            WHERE
-                post_id = ?
-        """, (post_id,))
-        rows = self.cursor.fetchall()
-        comments = [Comment(html=row[0], text=row[1], comment_created=row[2], post_id=row[3]) for row in rows]
-        return comments
+        """특정 게시글의 댓글을 조회합니다."""
+        query = "SELECT html, text, comment_created, post_id FROM comments WHERE post_id = ?"
+        rows = self._execute(query, (post_id,), fetch='all')
+        return [Comment(html=row[0], text=row[1], comment_created=row[2], post_id=row[3]) for row in rows]
 
     def search_posts(self, start_date: str, end_date: str, keyword: Optional[str] = None) -> List[Post]:
-        """
-        지정된 기간 내에 생성된 게시글을 검색하고, 선택적으로 키워드를 사용하여 제목 또는 내용으로 필터링합니다.
-
-        Args:
-            start_date (str): 검색 시작 날짜 (YYYY-MM-DD 형식).
-            end_date (str): 검색 종료 날짜 (YYYY-MM-DD 형식).
-            keyword (Optional[str]): 제목 또는 내용에서 검색할 키워드.
-
-        Returns:
-            List[Post]: 검색 조건에 맞는 Post 객체 리스트.
-        """
+        """지정된 기간과 키워드로 게시글을 검색합니다."""
         query = "SELECT id, title, url, content, content_html, image_urls, post_created FROM posts WHERE post_created BETWEEN ? AND ?"
         params = [start_date, end_date]
 
@@ -148,10 +110,7 @@ class DatabaseManager:
             query += " AND (title LIKE ? OR content LIKE ?)"
             params.extend([f'%{keyword}%', f'%{keyword}%'])
 
-        print(query, params)
-
-        self.cursor.execute(query, params)
-        rows = self.cursor.fetchall()
+        rows = self._execute(query, tuple(params), fetch='all')
         posts = []
         for row in rows:
             post_id, title, url, content, content_html, image_urls_json, post_created = row
